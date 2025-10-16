@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>５枚のゲーム</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f0f0f0;
+      text-align: center;
+      padding: 20px;
+    }
+    .button-grid {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+    .img-select-btn {
+      padding: 10px 18px;
+      font-size: 18px;
+      border: none;
+      border-radius: 6px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    .img-select-btn:hover {
+      background-color: #0056b3;
+    }
+    .audio-btn {
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      background-color: #28a745;
+      color: white;
+      cursor: pointer;
+    }
+    .audio-btn:hover {
+      background-color: #218838;
+    }
+    #image-display {
+      margin-top: 20px;
+    }
+    #image-display img {
+      width: 300px;
+      height: auto;
+      border: 4px solid #555;
+      border-radius: 8px;
+    }
+    #result, #score, #game-over, #correct-file, #hint-display {
+      margin-top: 20px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    #result.correct { color: green; }
+    #result.wrong { color: red; }
+  </style>
+</head>
+<body>
+  <h1>５枚のゲーム</h1>
+
+  <label><input type="checkbox" id="show-answers"> 正解情報を表示する</label>
+
+  <div id="image-display"></div>
+  <div id="correct-file" style="display: none;"></div>
+  <div id="hint-display" style="display: none;"></div>
+  <div class="button-grid" id="audio-buttons"></div>
+  <div class="button-grid" id="image-buttons"></div>
+
+  <div id="result"></div>
+  <div id="score">Score: 0</div>
+  <div id="game-over"></div>
+
+  <script>
+    const imageCount = 5;
+    const audioLabels = ['A', 'B', 'C', 'D', 'E'];
+    const correctMap = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5};
+    const scoreTable = [50, 40, 30, 20, 10];
+
+    let selectedImage = null;
+    let answeredImages = new Set();
+    let attempts = {};
+    let totalScore = 0;
+
+    const imageButtons = document.getElementById('image-buttons');
+    const audioButtons = document.getElementById('audio-buttons');
+    const imageDisplay = document.getElementById('image-display');
+    const resultDisplay = document.getElementById('result');
+    const scoreDisplay = document.getElementById('score');
+    const gameOverDisplay = document.getElementById('game-over');
+    const correctFileDisplay = document.getElementById('correct-file');
+    const hintDisplay = document.getElementById('hint-display');
+    const showAnswersCheckbox = document.getElementById('show-answers');
+
+    function setupImageButtons() {
+      for (let i = 1; i <= imageCount; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'img-select-btn';
+        btn.textContent = `画像 ${i}`;
+        btn.onclick = () => selectImage(i);
+        imageButtons.appendChild(btn);
+        attempts[i] = 0;
+      }
+    }
+
+    function selectImage(index) {
+      if (answeredImages.has(index)) return;
+      selectedImage = index;
+      imageDisplay.innerHTML = `<img src="scene${index}.jpg" alt="scene${index}">`;
+      resultDisplay.textContent = '';
+
+      const correct = correctMap[selectedImage];
+      const correctFile = `scene${correct}_jp.mp3`;
+
+      if (showAnswersCheckbox.checked) {
+        correctFileDisplay.style.display = 'block';
+        hintDisplay.style.display = 'block';
+        correctFileDisplay.textContent = `正解の音声ファイル: ${correctFile}`;
+        hintDisplay.textContent = `ヒント: 音声ボタン「${audioLabels[correct - 1]}」を押せば聞けます。`;
+      } else {
+        correctFileDisplay.style.display = 'none';
+        hintDisplay.style.display = 'none';
+      }
+    }
+
+    function setupAudioButtons() {
+      for (let i = 0; i < audioLabels.length; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'audio-btn';
+        btn.textContent = `音声 ${audioLabels[i]}`;
+        const audioIndex = i + 1;
+        btn.onclick = () => handleAnswer(audioIndex);
+        audioButtons.appendChild(btn);
+      }
+    }
+
+    function handleAnswer(audioIndex) {
+      if (!selectedImage || answeredImages.has(selectedImage)) return;
+
+      const audio = new Audio(`scene${audioIndex}_jp.mp3`);
+      audio.play();
+
+      const correct = correctMap[selectedImage];
+      attempts[selectedImage]++;
+
+      if (audioIndex === correct) {
+        const earned = scoreTable[Math.min(attempts[selectedImage] - 1, 4)];
+        resultDisplay.textContent = `正解！ +${earned}点`;
+        resultDisplay.className = 'correct';
+        totalScore += earned;
+        markImageAnswered(selectedImage);
+      } else {
+        if (attempts[selectedImage] >= 5) {
+          resultDisplay.textContent = `ハズレ！ 正解は 音声 ${audioLabels[correct - 1]}`;
+          resultDisplay.className = 'wrong';
+          markImageAnswered(selectedImage);
+        } else {
+          resultDisplay.textContent = `ハズレ！あと${5 - attempts[selectedImage]}回試せます。`;
+          resultDisplay.className = 'wrong';
+        }
+      }
+
+      updateScore();
+      if (answeredImages.size === imageCount) showGameOver();
+    }
+
+    function markImageAnswered(index) {
+      answeredImages.add(index);
+      selectedImage = null;
+      imageDisplay.innerHTML = '';
+      correctFileDisplay.style.display = 'none';
+      hintDisplay.style.display = 'none';
+    }
+
+    function updateScore() {
+      scoreDisplay.textContent = `Score: ${totalScore}`;
+    }
+
+    function showGameOver() {
+      gameOverDisplay.textContent = `ゲーム終了！合計スコアは ${totalScore} 点でした。`;
+    }
+
+    setupImageButtons();
+    setupAudioButtons();
+  </script>
+</body>
+</html>
+
+
