@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pharaoh’s Whisper – Audio Image Game (Intuition Mode)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    --bg:#000; --fg:#fff; --accent:#ffd54a;
+    --blue:#2196f3; --green:#28a745;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:"Segoe UI","Noto Sans JP",sans-serif;
+    background:var(--bg);
+    color:var(--fg);
+    text-align:center;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;    /* ✅ 中央寄せ */
+    padding-top:40px;          /* さらに少し下げる */
+  }
+
+  h1{
+    margin:18px 0 12px;
+    color:var(--accent);
+    text-shadow:0 0 14px rgba(255,213,74,.7);
+    letter-spacing:1px;
+  }
+
+  .row{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:14px}
+  button{
+    padding:10px 18px;font-size:17px;border:none;border-radius:8px;
+    color:#fff;cursor:pointer;transition:.15s;
+  }
+  .audio-btn{background:var(--green)} .audio-btn:hover{background:#1e7e34}
+  .img-btn{background:var(--blue)} .img-btn:hover{background:#1976d2}
+
+  #image-display img{
+    width:320px;max-width:92vw;height:auto;
+    border:3px solid var(--accent);border-radius:10px;margin-top:14px;
+    box-shadow:0 0 18px rgba(255,213,74,.55);
+  }
+
+  #bgm-toggle{
+    position:fixed;top:10px;right:12px;
+    background:var(--accent);color:#000;font-weight:700;
+    border-radius:8px;padding:8px 14px;
+    box-shadow:0 0 8px rgba(255,213,74,.8);z-index:20;
+  }
+
+  label{display:inline-block;margin-top:8px}
+
+  #answer-box{
+    display:none;margin:12px auto 0;width:92%;max-width:440px;
+    background:rgba(255,255,255,.06);border:1px solid var(--accent);
+    border-radius:10px;padding:10px;box-shadow:0 0 10px rgba(255,213,74,.3);
+  }
+  #answer-box table{width:100%;border-collapse:collapse;font-size:14px}
+  #answer-box th,#answer-box td{border:1px solid #666;padding:4px 6px}
+  #answer-box th{background:rgba(255,213,74,.16)}
+
+  /* ✨ Intro overlay */
+  #intro{
+    position:fixed;inset:0;background:radial-gradient(circle at center,#111 0%,#000 70%);
+    display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end;
+    padding-bottom:120px;padding-right:60px;
+    color:var(--accent);z-index:100;text-align:right;
+    opacity:1;transition:opacity 2s ease;
+  }
+  #intro h2{
+    font-size:28px;margin-bottom:14px;text-shadow:0 0 16px rgba(255,213,74,.9);
+    letter-spacing:1px;
+  }
+  #intro p{
+    max-width:480px;line-height:1.6;font-size:17px;margin:6px 0;
+    opacity:0;transition:opacity 1.5s;
+  }
+  #intro.fadeout{opacity:0;pointer-events:none;}
+
+  #notice{
+    position:fixed;inset:0;display:flex;justify-content:center;align-items:center;
+    background:rgba(0,0,0,.8);color:var(--accent);font-size:20px;
+    opacity:0;transition:opacity 1.5s;z-index:50;pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<h1>Audio Image Game – Pharaoh Edition</h1>
+<button id="bgm-toggle">🎵 Play BGM</button>
+
+<label><input type="checkbox" id="show-answers"> Show answer info (for staff)</label>
+<div id="answer-box">
+  <div id="summary"></div>
+</div>
+
+<div id="image-display"></div>
+<div class="row" id="audio-buttons"></div>
+<div class="row" id="image-buttons"></div>
+
+<div id="notice">Follow your intuition…</div>
+
+<!-- 🌙 Intro Scene -->
+<div id="intro">
+  <h2>Pharaoh’s Whisper</h2>
+  <p id="l1">In the desert of dreams, sounds and visions intertwine.</p>
+  <p id="l2">Each image holds a voice — waiting for you to listen.</p>
+  <p id="l3">There is no right or wrong here, only feeling.</p>
+  <p id="l4">Close your eyes for a moment. Let intuition be your guide.</p>
+  <p id="l5">When the music begins, your journey through echoes of the Pharaoh will start.</p>
+</div>
+
+<audio id="bgm" src="https://hatoniwa.github.io/game-commons/bgm.mp3" loop></audio>
+
+<script>
+/* ===== Config ===== */
+const IMAGE_COUNT=5;
+const AUDIO_LABELS=['A','B','C','D','E'];
+const AUDIO_SUFFIX='_jp.mp3';
+const bgm=document.getElementById('bgm');
+let bgmPlaying=false;
+
+/* Random mapping */
+const indices=[1,2,3,4,5];
+const shuffled=[...indices].sort(()=>Math.random()-0.5);
+const correctMap={};
+indices.forEach((img,i)=>correctMap[img]=shuffled[i]);
+
+/* Elements */
+const imgBtns=document.getElementById('image-buttons');
+const audBtns=document.getElementById('audio-buttons');
+const imageDisplay=document.getElementById('image-display');
+const showAns=document.getElementById('show-answers');
+const answerBox=document.getElementById('answer-box');
+const summary=document.getElementById('summary');
+const notice=document.getElementById('notice');
+
+/* ===== Setup ===== */
+for(let i=0;i<AUDIO_LABELS.length;i++){
+  const b=document.createElement('button');
+  b.className='audio-btn';
+  b.textContent=`Audio ${AUDIO_LABELS[i]}`;
+  const idx=i+1;
+  b.onclick=()=>playAudio(idx);
+  audBtns.appendChild(b);
+}
+for(let i=1;i<=IMAGE_COUNT;i++){
+  const b=document.createElement('button');
+  b.className='img-btn';
+  b.textContent=`Image ${i}`;
+  b.onclick=()=>selectImage(i);
+  imgBtns.appendChild(b);
+}
+
+/* ===== Behavior ===== */
+let selectedImage=null;
+
+function selectImage(index){
+  selectedImage=index;
+  imageDisplay.innerHTML=`<img src="scene${index}.jpg" alt="scene${index}">`;
+  showNotice("Listen closely…");
+}
+
+function playAudio(audioIndex){
+  const a=new Audio(`scene${audioIndex}${AUDIO_SUFFIX}`);
+  if(bgmPlaying) bgm.pause();
+  a.play().catch(()=>{});
+  a.onended=()=>{ if(bgmPlaying) bgm.play().catch(()=>{}); };
+}
+
+/* ===== Notice fade ===== */
+function showNotice(text){
+  notice.textContent=text;
+  notice.style.opacity=1;
+  setTimeout(()=>notice.style.opacity=0,1500);
+}
+
+/* ===== Help window ===== */
+function updateAnswers(){
+  if(!showAns.checked){answerBox.style.display='none';return;}
+  answerBox.style.display='block';
+  let html='<table><tr><th>Image</th><th>Correct Audio</th><th>File</th></tr>';
+  for(let i=1;i<=IMAGE_COUNT;i++){
+    const c=correctMap[i];
+    html+=`<tr><td>Image ${i}</td><td>Audio ${AUDIO_LABELS[c-1]}</td><td>scene${c}${AUDIO_SUFFIX}</td></tr>`;
+  }
+  html+='</table>';
+  summary.innerHTML=html;
+}
+showAns.addEventListener('change',updateAnswers);
+
+/* ===== BGM toggle ===== */
+const bgmToggle=document.getElementById('bgm-toggle');
+bgmToggle.onclick=()=>{
+  if(bgmPlaying){bgm.pause();bgmToggle.textContent='🎵 Play BGM';}
+  else{bgm.volume=0.5;bgm.play().catch(()=>{});bgmToggle.textContent='🔇 Stop BGM';}
+  bgmPlaying=!bgmPlaying;
+};
+
+/* ===== Intro sequence ===== */
+const intro=document.getElementById('intro');
+const lines=['l1','l2','l3','l4','l5'].map(id=>document.getElementById(id));
+
+function startIntro(){
+  lines.forEach((p,i)=>{
+    setTimeout(()=>{p.style.opacity=1;},i*1300+500);
+  });
+  setTimeout(()=>{
+    intro.classList.add('fadeout');
+    bgm.volume=0.5; bgm.play().catch(()=>{});
+    bgmPlaying=true;
+  },10500);
+}
+startIntro();
+setTimeout(()=>updateAnswers(),11000);
+</script>
+</body>
+</html>
