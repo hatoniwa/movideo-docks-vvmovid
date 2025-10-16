@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>５枚のゲーム - 本番版（ランダム＋選択式終了）</title>
+  <style>
+    body {
+      font-family: "Noto Sans JP", sans-serif;
+      background: #f0f0f0;
+      text-align: center;
+      padding: 20px;
+    }
+
+    h1 { margin-bottom: 10px; }
+
+    .button-grid {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    .img-select-btn, .audio-btn, #end-btn {
+      padding: 10px 18px;
+      font-size: 18px;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+    }
+
+    .img-select-btn { background-color: #007bff; }
+    .img-select-btn:hover { background-color: #0056b3; }
+
+    .audio-btn { background-color: #28a745; }
+    .audio-btn:hover { background-color: #218838; }
+
+    #end-btn {
+      margin-top: 15px;
+      background-color: #dc3545;
+    }
+    #end-btn:hover { background-color: #b02a37; }
+
+    #image-display { margin-top: 20px; }
+
+    #image-display img {
+      width: 300px;
+      height: auto;
+      border: 4px solid #555;
+      border-radius: 8px;
+    }
+
+    #result, #score, #game-over, #correct-file, #hint-display {
+      margin-top: 20px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    #result.correct { color: green; }
+    #result.wrong { color: red; }
+
+    /* --- How to Play Overlay --- */
+    #instructions {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      text-align: center;
+    }
+
+    #instructions p {
+      max-width: 320px;
+      line-height: 1.6;
+      text-align: left;
+    }
+
+    #start-btn {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-top: 15px;
+      border-radius: 6px;
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    #start-btn:hover { background: #0056b3; }
+
+    /* --- BGM Toggle Button --- */
+    #bgm-toggle {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      background: #ffc107;
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 50;
+    }
+    #bgm-toggle:hover { background: #e0a800; }
+
+    /* --- 終了メニュー --- */
+    #end-menu {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      z-index: 200;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #end-menu .menu-box {
+      background: #222;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px #000;
+      text-align: center;
+    }
+
+    #end-menu button {
+      margin: 8px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 16px;
+      border: none;
+      cursor: pointer;
+    }
+
+    #go-home { background: #007bff; color: white; }
+    #watch-yt { background: #28a745; color: white; }
+    #cancel-end { background: #dc3545; color: white; }
+  </style>
+</head>
+<body>
+  <h1>５枚のゲーム</h1>
+
+  <button id="bgm-toggle">🎵 BGM再生</button>
+
+  <label><input type="checkbox" id="show-answers"> 正解情報を表示する</label>
+
+  <div id="image-display"></div>
+  <div id="correct-file" style="display: none;"></div>
+  <div id="hint-display" style="display: none;"></div>
+
+  <div class="button-grid" id="audio-buttons"></div>
+  <div class="button-grid" id="image-buttons"></div>
+
+  <div id="result"></div>
+  <div id="score">Score: 0</div>
+  <div id="game-over"></div>
+  <button id="end-btn">ゲームを終了する</button>
+
+  <!-- 🎮 How to Play (English) -->
+  <div id="instructions">
+    <h2>How to Play</h2>
+    <p>
+      • Choose one of the 5 image buttons.<br>
+      • Listen to the 5 audio clips (A–E).<br>
+      • Guess which voice matches the selected image.<br>
+      • You get 50 points for a correct answer on the first try.<br>
+      • The score decreases each time you miss.<br>
+      • Try all 5 images to finish the game.<br><br>
+      Good luck — trust your intuition!
+    </p>
+    <button id="start-btn">Start Game</button>
+  </div>
+
+  <!-- 🎵 外部BGM -->
+  <audio id="bgm" src="https://hatoniwa.github.io/game-commons/bgm.mp3" loop></audio>
+
+  <!-- 🚪 終了メニュー -->
+  <div id="end-menu">
+    <div class="menu-box">
+      <h3>ゲームを終了しますか？</h3>
+      <p>次の行動を選んでください。</p>
+      <button id="go-home">🏠 次のステージへ</button>
+      <button id="watch-yt">🎥 YouTubeを見る</button>
+      <button id="cancel-end">❌ ゲームを続ける</button>
+    </div>
+  </div>
+
+  <script>
+    // --- 基本設定 ---
+    const imageCount = 5;
+    const audioLabels = ['A', 'B', 'C', 'D', 'E'];
+    const scoreTable = [50, 40, 30, 20, 10];
+
+    // --- ランダムな正解マッピング ---
+    const correctMap = {};
+    const indices = [1,2,3,4,5];
+    const shuffled = [...indices].sort(() => Math.random() - 0.5);
+    indices.forEach((img, i) => correctMap[img] = shuffled[i]);
+
+    let selectedImage = null;
+    let answeredImages = new Set();
+    let attempts = {};
+    let totalScore = 0;
+
+    const imageButtons = document.getElementById('image-buttons');
+    const audioButtons = document.getElementById('audio-buttons');
+    const imageDisplay = document.getElementById('image-display');
+    const resultDisplay = document.getElementById('result');
+    const scoreDisplay = document.getElementById('score');
+    const gameOverDisplay = document.getElementById('game-over');
+    const correctFileDisplay = document.getElementById('correct-file');
+    const hintDisplay = document.getElementById('hint-display');
+    const showAnswersCheckbox = document.getElementById('show-answers');
+    const endBtn = document.getElementById('end-btn');
+    const bgm = document.getElementById('bgm');
+    const bgmToggle = document.getElementById('bgm-toggle');
+    let bgmPlaying = false;
+
+    // --- 画像ボタン生成 ---
+    function setupImageButtons() {
+      for (let i = 1; i <= imageCount; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'img-select-btn';
+        btn.textContent = `画像 ${i}`;
+        btn.onclick = () => selectImage(i);
+        imageButtons.appendChild(btn);
+        attempts[i] = 0;
+      }
+    }
+
+    // --- 音声ボタン生成 ---
+    function setupAudioButtons() {
+      for (let i = 0; i < audioLabels.length; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'audio-btn';
+        btn.textContent = `音声 ${audioLabels[i]}`;
+        const audioIndex = i + 1;
+        btn.onclick = () => handleAnswer(audioIndex);
+        audioButtons.appendChild(btn);
+      }
+    }
+
+    // --- 画像選択 ---
+    function selectImage(index) {
+      if (answeredImages.has(index)) return;
+      selectedImage = index;
+      imageDisplay.innerHTML = `<img src="scene${index}.jpg" alt="scene${index}">`;
+      resultDisplay.textContent = '';
+
+      const correct = correctMap[selectedImage];
+      const correctFile = `scene${correct}_jp.mp3`;
+
+      if (showAnswersCheckbox.checked) {
+        correctFileDisplay.style.display = 'block';
+        hintDisplay.style.display = 'block';
+        correctFileDisplay.textContent = `正解の音声ファイル: ${correctFile}`;
+        hintDisplay.textContent = `ヒント: 音声ボタン「${audioLabels[correct - 1]}」を押せば聞けます。`;
+      } else {
+        correctFileDisplay.style.display = 'none';
+        hintDisplay.style.display = 'none';
+      }
+    }
+
+    // --- 音声判定 ---
+    function handleAnswer(audioIndex) {
+      if (!selectedImage || answeredImages.has(selectedImage)) return;
+
+      const correct = correctMap[selectedImage];
+      attempts[selectedImage]++;
+
+      if (audioIndex === correct) {
+        const earned = scoreTable[Math.min(attempts[selectedImage] - 1, 4)];
+        resultDisplay.textContent = `正解！ +${earned}点`;
+        resultDisplay.className = 'correct';
+        totalScore += earned;
+        markImageAnswered(selectedImage);
+      } else {
+        if (attempts[selectedImage] >= 5) {
+          resultDisplay.textContent = `ハズレ！ 正解は 音声 ${audioLabels[correct - 1]}`;
+          resultDisplay.className = 'wrong';
+          markImageAnswered(selectedImage);
+        } else {
+          resultDisplay.textContent = `ハズレ！あと${5 - attempts[selectedImage]}回試せます。`;
+          resultDisplay.className = 'wrong';
+        }
+      }
+
+      updateScore();
+      if (answeredImages.size === imageCount) showGameOver();
+    }
+
+    function markImageAnswered(index) {
+      answeredImages.add(index);
+      selectedImage = null;
+      imageDisplay.innerHTML = '';
+      correctFileDisplay.style.display = 'none';
+      hintDisplay.style.display = 'none';
+    }
+
+    function updateScore() {
+      scoreDisplay.textContent = `Score: ${totalScore}`;
+    }
+
+    function showGameOver() {
+      gameOverDisplay.textContent = `ゲーム終了！合計スコアは ${totalScore} 点でした。`;
+    }
+
+    // --- 終了メニュー ---
+    const endMenu = document.getElementById('end-menu');
+    const goHome = document.getElementById('go-home');
+    const watchYT = document.getElementById('watch-yt');
+    const cancelEnd = document.getElementById('cancel-end');
+
+    endBtn.onclick = () => {
+      endMenu.style.display = 'flex';
+    };
+
+    goHome.onclick = () => {
+      location.href = "https://hatoniwa.github.io/movideo-docks-ccmovid/gg-intro.html";
+    };
+
+    watchYT.onclick = () => {
+      window.open("https://www.youtube.com/@hatoniwa", "_blank");
+    };
+
+    cancelEnd.onclick = () => {
+      endMenu.style.display = 'none';
+    };
+
+    // --- BGMコントロール ---
+    bgmToggle.onclick = () => {
+      if (bgmPlaying) {
+        bgm.pause();
+        bgmToggle.textContent = "🎵 BGM再生";
+      } else {
+        bgm.volume = 0.5;
+        bgm.play().catch(() => {});
+        bgmToggle.textContent = "🔇 BGM停止";
+      }
+      bgmPlaying = !bgmPlaying;
+    };
+
+    // --- 初期化 ---
+    setupImageButtons();
+    setupAudioButtons();
+
+    // --- How to Play画面制御 ---
+    const instructionBox = document.getElementById('instructions');
+    const startBtn = document.getElementById('start-btn');
+    startBtn.onclick = () => {
+      instructionBox.style.display = 'none';
+    };
+  </script>
+</body>
+</html>
